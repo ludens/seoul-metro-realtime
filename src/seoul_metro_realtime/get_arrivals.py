@@ -7,7 +7,7 @@ import os
 import sys
 
 import httpx
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 from seoul_metro_realtime.station_lookup import normalize_station_name
 
@@ -161,12 +161,15 @@ def build_summary_for_station(raw_name: str, rows: list[dict[str, str]], now: da
 
 
 def load_api_key(candidate_env_files: list[Path]) -> str:
+    existing_key = os.getenv("SEOUL_OPEN_API_KEY")
+    if existing_key:
+        return existing_key
+
     for env_file in candidate_env_files:
         if env_file.exists():
-            load_dotenv(env_file, override=False)
-            key = os.getenv("SEOUL_OPEN_API_KEY")
+            key = dotenv_values(env_file).get("SEOUL_OPEN_API_KEY")
             if key:
-                return key
+                return str(key)
     raise RuntimeError("SEOUL_OPEN_API_KEY not found in .env")
 
 
@@ -185,7 +188,7 @@ def main() -> int:
         return 1
 
     package_root = Path(__file__).resolve().parents[2]
-    env_files = [package_root / ".env", package_root.parent.parent / ".env"]
+    env_files = [Path.cwd() / ".env", package_root / ".env", package_root.parent.parent / ".env"]
     raw_name = sys.argv[1]
     api_key = load_api_key(env_files)
     payload = fetch_realtime_arrivals(api_key, raw_name)

@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+from pathlib import Path
+import seoul_metro_realtime.get_arrivals as get_arrivals_module
 from seoul_metro_realtime.get_arrivals import (
     LINE_NAME_BY_ID,
     adjust_arrival_seconds,
@@ -125,6 +127,31 @@ def test_load_api_key_reads_dotenv(tmp_path: Path):
     assert load_api_key([env_file]) == "test-key"
 
 
+def test_load_api_key_prefers_existing_environment_variable(monkeypatch):
+    monkeypatch.setenv("SEOUL_OPEN_API_KEY", "env-key")
+
+    assert load_api_key([]) == "env-key"
+
+
+def test_main_loads_dotenv_from_current_working_directory(tmp_path: Path, monkeypatch, capsys):
+    env_file = tmp_path / ".env"
+    env_file.write_text("SEOUL_OPEN_API_KEY=cwd-key\n", encoding="utf-8")
+
+    def fake_fetch_realtime_arrivals(api_key: str, station_name: str) -> dict[str, object]:
+        assert api_key == "cwd-key"
+        assert station_name == "서울역"
+        return {"realtimeArrivalList": []}
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(get_arrivals_module, "fetch_realtime_arrivals", fake_fetch_realtime_arrivals)
+    monkeypatch.setattr(get_arrivals_module, "extract_arrival_rows", lambda payload: [])
+    monkeypatch.setattr(get_arrivals_module, "build_summary_for_station", lambda raw_name, rows, now: "ok")
+    monkeypatch.setattr(get_arrivals_module.sys, "argv", ["seoul-metro-realtime", "서울역"])
+
+    assert get_arrivals_module.main() == 0
+    assert capsys.readouterr().out.strip() == "ok"
+
+
 def test_extract_arrival_rows_returns_empty_for_info_200():
     payload = {
         "errorMessage": {"status": 200, "code": "INFO-200", "message": "해당하는 데이터가 없습니다."}
@@ -175,7 +202,6 @@ def test_parse_api_arrivals_maps_subway_id_to_line_name():
         }
     ])
 
-    assert LINE_NAME_BY_ID["1065"] == "공항철도"
     assert arrivals[0]["line_name"] == "공항철도"
 
 
