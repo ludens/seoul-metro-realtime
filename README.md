@@ -89,14 +89,38 @@ uv build --no-sources
 
 ## 배포
 
-PyPI 인증이 준비되어 있으면 업로드:
+### GitHub Actions 수동 배포
 
-```bash
-uv publish
-```
+저장소에는 수동 실행용 GitHub Actions workflow 가 포함되어 있다.
+
+파일:
+
+- `.github/workflows/publish-pypi.yml`
+
+동작:
+
+- `workflow_dispatch` 로 수동 실행
+- `uv sync --group dev`
+- `uv run pytest -v`
+- `uv build --no-sources`
+- GitHub Actions secret `PYPI_API_TOKEN` 으로 업로드
+
+사전 준비:
+
+1. PyPI 에서 API token 을 발급한다.
+2. GitHub 저장소 Settings > Secrets and variables > Actions 에 `PYPI_API_TOKEN` secret 을 추가한다.
+3. GitHub 저장소의 Actions 탭에서 `Publish to PyPI` workflow 를 수동 실행한다.
 
 주의:
 
 - 패키지 이름이 PyPI에서 사용 가능해야 한다
 - 같은 버전은 다시 업로드할 수 없다
-- 업로드 전에 `uv build --no-sources` 와 `uv run pytest -v` 를 먼저 확인하는 편이 안전하다
+- PyPI token 은 보통 `pypi-` 로 시작하며, GitHub secret 이름은 정확히 `PYPI_API_TOKEN` 이어야 한다
+
+### 로컬에서 직접 배포
+
+PyPI 인증이 준비되어 있으면 아래도 가능하다.
+
+```bash
+uv publish
+```
