@@ -1,13 +1,17 @@
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 import seoul_metro_realtime.get_arrivals as get_arrivals_module
 from seoul_metro_realtime.get_arrivals import (
+    Arrival,
     LINE_NAME_BY_ID,
     adjust_arrival_seconds,
     build_summary_for_station,
+    build_json_for_station,
     extract_arrival_rows,
     fetch_realtime_arrivals,
     format_arrivals_summary,
+    get_station_arrivals_summary,
     load_api_key,
     parse_api_arrivals,
 )
@@ -48,8 +52,8 @@ def test_adjust_arrival_seconds_accounts_for_receipt_delay():
 
 def test_format_arrivals_summary_groups_by_line_name():
     arrivals = [
-        {"line_name": "1호선", "train_line_nm": "인천행 - 남영방면", "seconds": 120, "status": "일반", "is_last_train": False},
-        {"line_name": "경의중앙선", "train_line_nm": "문산행 - 효창공원앞방면", "seconds": 240, "status": "급행", "is_last_train": True},
+        Arrival(line_name="1호선", train_line_nm="인천행 - 남영방면", seconds=120, status="일반", is_last_train=False),
+        Arrival(line_name="경의중앙선", train_line_nm="문산행 - 효창공원앞방면", seconds=240, status="급행", is_last_train=True),
     ]
 
     output = format_arrivals_summary("서울", arrivals)
@@ -65,9 +69,9 @@ def test_format_arrivals_summary_groups_by_line_name():
 
 def test_format_arrivals_summary_groups_by_direction_within_line():
     arrivals = [
-        {"line_name": "1호선", "train_line_nm": "광운대행 - 남영방면", "seconds": 0, "status": "일반", "is_last_train": False, "arvl_msg2": "용산 도착", "arvl_cd": "1"},
-        {"line_name": "1호선", "train_line_nm": "동두천행 - 남영방면", "seconds": 120, "status": "일반", "is_last_train": False},
-        {"line_name": "1호선", "train_line_nm": "인천행 - 노량진방면", "seconds": 180, "status": "일반", "is_last_train": False},
+        Arrival(line_name="1호선", train_line_nm="광운대행 - 남영방면", seconds=0, status="일반", is_last_train=False, arvl_msg2="용산 도착", arvl_cd="1"),
+        Arrival(line_name="1호선", train_line_nm="동두천행 - 남영방면", seconds=120, status="일반", is_last_train=False),
+        Arrival(line_name="1호선", train_line_nm="인천행 - 노량진방면", seconds=180, status="일반", is_last_train=False),
     ]
 
     output = format_arrivals_summary("용산", arrivals)
@@ -82,15 +86,15 @@ def test_format_arrivals_summary_groups_by_direction_within_line():
 
 def test_format_arrivals_summary_uses_soon_and_removes_duplicate_status_in_train_name():
     arrivals = [
-        {
-            "line_name": "경의중앙선",
-            "train_line_nm": "용문행 - 홍대입구방면 (급행)",
-            "seconds": 0,
-            "status": "급행",
-            "is_last_train": False,
-            "arvl_msg2": "가좌 도착",
-            "arvl_cd": "1",
-        }
+        Arrival(
+            line_name="경의중앙선",
+            train_line_nm="용문행 - 홍대입구방면 (급행)",
+            seconds=0,
+            status="급행",
+            is_last_train=False,
+            arvl_msg2="가좌 도착",
+            arvl_cd="1",
+        )
     ]
 
     output = format_arrivals_summary("가좌", arrivals)
@@ -102,15 +106,15 @@ def test_format_arrivals_summary_uses_soon_and_removes_duplicate_status_in_train
 
 def test_format_arrivals_summary_uses_arvl_msg2_for_running_trains():
     arrivals = [
-        {
-            "line_name": "경의중앙선",
-            "train_line_nm": "용문행 - 홍대입구방면 (급행)",
-            "seconds": 0,
-            "status": "급행",
-            "is_last_train": False,
-            "arvl_msg2": "[5]번째 전역 (행신)",
-            "arvl_cd": "99",
-        }
+        Arrival(
+            line_name="경의중앙선",
+            train_line_nm="용문행 - 홍대입구방면 (급행)",
+            seconds=0,
+            status="급행",
+            is_last_train=False,
+            arvl_msg2="[5]번째 전역 (행신)",
+            arvl_cd="99",
+        )
     ]
 
     output = format_arrivals_summary("가좌", arrivals)
@@ -188,6 +192,61 @@ def test_build_summary_for_station_adjusts_and_sorts_arrivals():
     assert "문산행: 3분 후 도착 (급행, 막차)" in output
 
 
+def test_build_json_for_station_returns_structured_arrivals():
+    now = datetime(2026, 4, 8, 10, 5, 30, tzinfo=timezone.utc)
+    rows = [
+        {
+            "subwayId": "1063",
+            "trainLineNm": "문산행 - 효창공원앞방면 (급행)",
+            "barvlDt": "240",
+            "btrainSttus": "급행",
+            "lstcarAt": "1",
+            "recptnDt": "2026-04-08 10:05:00",
+            "arvlMsg2": "",
+            "arvlCd": "99",
+        },
+        {
+            "subwayId": "1001",
+            "trainLineNm": "인천행 - 남영방면",
+            "barvlDt": "180",
+            "btrainSttus": "일반",
+            "lstcarAt": "0",
+            "recptnDt": "2026-04-08 10:03:30",
+            "arvlMsg2": "",
+            "arvlCd": "99",
+        },
+    ]
+
+    output = build_json_for_station("서울역", rows, now)
+
+    assert output["station_name"] == "서울"
+    assert output["generated_at"] == "2026-04-08T10:05:30+00:00"
+    assert output["arrivals"] == [
+        {
+            "line_name": "1호선",
+            "direction": "남영방면",
+            "destination": "인천행",
+            "eta": "1분 후 도착",
+            "seconds": 60,
+            "status": "일반",
+            "is_last_train": False,
+            "arvl_msg2": "",
+            "arvl_cd": "99",
+        },
+        {
+            "line_name": "경의중앙선",
+            "direction": "효창공원앞방면",
+            "destination": "문산행",
+            "eta": "3분 후 도착",
+            "seconds": 210,
+            "status": "급행",
+            "is_last_train": True,
+            "arvl_msg2": "",
+            "arvl_cd": "99",
+        },
+    ]
+
+
 def test_parse_api_arrivals_maps_subway_id_to_line_name():
     arrivals = parse_api_arrivals([
         {
@@ -202,7 +261,70 @@ def test_parse_api_arrivals_maps_subway_id_to_line_name():
         }
     ])
 
-    assert arrivals[0]["line_name"] == "공항철도"
+    assert arrivals == [
+        Arrival(
+            line_name="공항철도",
+            train_line_nm="인천공항2터미널행 - 홍대입구방면",
+            seconds=0,
+            status="일반",
+            is_last_train=False,
+            receipt_time="2026-04-08 10:03:30",
+            arvl_msg2="공덕 도착",
+            arvl_cd="1",
+        )
+    ]
+
+
+def test_get_station_arrivals_summary_fetches_extracts_and_formats(monkeypatch):
+    now = datetime(2026, 4, 8, 10, 5, 30, tzinfo=timezone.utc)
+
+    def fake_fetch(api_key: str, station_name: str) -> dict[str, object]:
+        assert api_key == "secret-key"
+        assert station_name == "서울역"
+        return {"payload": True}
+
+    monkeypatch.setattr(
+        get_arrivals_module,
+        "extract_arrival_rows",
+        lambda payload: [
+            {
+                "subwayId": "1001",
+                "trainLineNm": "인천행 - 남영방면",
+                "barvlDt": "180",
+                "btrainSttus": "일반",
+                "lstcarAt": "0",
+                "recptnDt": "2026-04-08 10:03:30",
+            }
+        ],
+    )
+
+    output = get_station_arrivals_summary("secret-key", "서울역", now, fetcher=fake_fetch)
+
+    assert output.startswith("서울 실시간 도착정보")
+    assert "인천행: 1분 후 도착" in output
+
+
+def test_main_prints_json_when_json_flag_is_used(tmp_path: Path, monkeypatch, capsys):
+    env_file = tmp_path / ".env"
+    env_file.write_text("SEOUL_OPEN_API_KEY=cwd-key\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(get_arrivals_module, "get_station_arrivals_summary", lambda api_key, station_name, now: "text output")
+    monkeypatch.setattr(
+        get_arrivals_module,
+        "build_json_for_station",
+        lambda raw_name, rows, now: {"station_name": "서울", "generated_at": "2026-04-08T10:05:30", "arrivals": []},
+    )
+    monkeypatch.setattr(get_arrivals_module, "fetch_realtime_arrivals", lambda api_key, station_name: {"realtimeArrivalList": []})
+    monkeypatch.setattr(get_arrivals_module, "extract_arrival_rows", lambda payload: [])
+    monkeypatch.setattr(get_arrivals_module.sys, "argv", ["seoul-metro-realtime", "--json", "서울역"])
+
+    assert get_arrivals_module.main() == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "station_name": "서울",
+        "generated_at": "2026-04-08T10:05:30",
+        "arrivals": [],
+    }
 
 
 def test_fetch_realtime_arrivals_normalizes_station_name_before_request(monkeypatch):
