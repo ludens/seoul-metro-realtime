@@ -16,10 +16,6 @@
 
 현재 작업 디렉터리에 `.env` 파일을 만들고 키를 넣는다.
 
-```bash
-cp .env.example .env
-```
-
 `.env`:
 
 ```bash
@@ -33,6 +29,12 @@ export SEOUL_OPEN_API_KEY=your_api_key_here
 ```
 
 ### 2. 로컬 프로젝트에서 실행
+
+저장소를 체크아웃해서 로컬에서 작업 중이라면 `.env.example` 를 복사해서 시작해도 된다.
+
+```bash
+cp .env.example .env
+```
 
 ```bash
 uv run seoul-metro-realtime 서울역
@@ -51,6 +53,8 @@ uvx --from . seoul-metro-realtime 서울역
 1. `SEOUL_OPEN_API_KEY` 환경변수
 2. 현재 작업 디렉터리의 `.env`
 3. 패키지 루트의 `.env`
+
+`uvx` 로 실행할 때는 저장소 안에 있는 `.env.example` 를 복사할 수 없을 수 있으니, 현재 작업 디렉터리에 `.env` 를 직접 만들거나 환경변수를 사용하면 된다.
 
 즉, publish 후에도 아래처럼 현재 디렉터리에 `.env` 가 있으면 된다.
 
