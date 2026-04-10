@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "split-commit": {
+      "source": "ludens/my-skills",
+      "sourceType": "github",
+      "computedHash": "deaed06038317fc13da1229d6866e57e40c716a6c271861b73c4d6f793933a44"
+    }
+  }
+}
