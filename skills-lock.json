@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "pre-push-review": {
+      "source": "ludens/my-skills",
+      "sourceType": "github",
+      "computedHash": "01d00bf119241902a4c210ce732be9f53191815e41763552a618797f615f0356"
+    },
     "python-design-patterns": {
       "source": "wshobson/agents",
       "sourceType": "github",
