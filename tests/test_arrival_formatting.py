@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import stat
 import seoul_metro_realtime.get_arrivals as get_arrivals_module
 from seoul_metro_realtime.get_arrivals import (
     Arrival,
@@ -131,10 +132,60 @@ def test_load_api_key_reads_dotenv(tmp_path: Path):
     assert load_api_key([env_file]) == "test-key"
 
 
+def test_load_api_key_reads_user_config_file(tmp_path: Path):
+    config_file = tmp_path / "config.env"
+    config_file.write_text("SEOUL_OPEN_API_KEY=config-key\n", encoding="utf-8")
+
+    assert load_api_key([], config_file=config_file) == "config-key"
+
+
+def test_load_api_key_reads_user_config_before_fallback_env_file(tmp_path: Path):
+    config_file = tmp_path / "config.env"
+    fallback_env_file = tmp_path / "package.env"
+    config_file.write_text("SEOUL_OPEN_API_KEY=config-key\n", encoding="utf-8")
+    fallback_env_file.write_text("SEOUL_OPEN_API_KEY=fallback-key\n", encoding="utf-8")
+
+    assert (
+        load_api_key(
+            [],
+            config_file=config_file,
+            fallback_env_files=[fallback_env_file],
+        )
+        == "config-key"
+    )
+
+
 def test_load_api_key_prefers_existing_environment_variable(monkeypatch):
     monkeypatch.setenv("SEOUL_OPEN_API_KEY", "env-key")
 
     assert load_api_key([]) == "env-key"
+
+
+def test_configure_command_writes_user_config_file(tmp_path: Path, monkeypatch, capsys):
+    config_file = tmp_path / "config.env"
+
+    monkeypatch.setattr(get_arrivals_module, "USER_CONFIG_FILE", config_file)
+    monkeypatch.setattr(get_arrivals_module.getpass, "getpass", lambda prompt: "configured-key")
+    monkeypatch.setattr(get_arrivals_module.sys, "argv", ["seoul-metro-realtime", "configure"])
+
+    assert get_arrivals_module.main() == 0
+    assert config_file.read_text(encoding="utf-8") == "SEOUL_OPEN_API_KEY=configured-key\n"
+    assert stat.S_IMODE(config_file.stat().st_mode) == 0o600
+    assert str(config_file) in capsys.readouterr().out
+
+
+def test_main_guides_user_to_configure_when_api_key_is_missing(tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SEOUL_OPEN_API_KEY", raising=False)
+    monkeypatch.setattr(get_arrivals_module, "USER_CONFIG_FILE", tmp_path / "missing.env")
+    monkeypatch.setattr(get_arrivals_module.sys, "argv", ["seoul-metro-realtime", "서울역"])
+
+    assert get_arrivals_module.main() == 1
+
+    output = capsys.readouterr().out
+    assert "API 키가 설정되지 않았습니다." in output
+    assert "seoul-metro-realtime configure" in output
+    assert "export SEOUL_OPEN_API_KEY=" in output
 
 
 def test_main_loads_dotenv_from_current_working_directory(tmp_path: Path, monkeypatch, capsys):

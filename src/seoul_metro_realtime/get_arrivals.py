@@ -3,16 +3,19 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, replace
 from datetime import datetime
+import getpass
 import json
-from pathlib import Path
-from typing import Callable
 import os
+from pathlib import Path
 import sys
+from typing import Callable
 
 import httpx
 from dotenv import dotenv_values
 
 from seoul_metro_realtime.station_lookup import normalize_station_name
+
+USER_CONFIG_FILE = Path.home() / ".config" / "seoul-metro-realtime" / "config.env"
 
 LINE_NAME_BY_ID = {
     "1001": "1호선",
@@ -207,17 +210,46 @@ def build_json_for_station(raw_name: str, rows: list[dict[str, str]], now: datet
     }
 
 
-def load_api_key(candidate_env_files: list[Path]) -> str:
+def load_api_key(
+    candidate_env_files: list[Path],
+    config_file: Path | None = None,
+    fallback_env_files: list[Path] | None = None,
+) -> str:
     existing_key = os.getenv("SEOUL_OPEN_API_KEY")
     if existing_key:
         return existing_key
 
+    resolved_config_file = config_file or USER_CONFIG_FILE
     for env_file in candidate_env_files:
         if env_file.exists():
             key = dotenv_values(env_file).get("SEOUL_OPEN_API_KEY")
             if key:
                 return str(key)
-    raise RuntimeError("SEOUL_OPEN_API_KEY not found in .env")
+
+    if resolved_config_file.exists():
+        key = dotenv_values(resolved_config_file).get("SEOUL_OPEN_API_KEY")
+        if key:
+            return str(key)
+
+    for env_file in fallback_env_files or []:
+        if env_file.exists():
+            key = dotenv_values(env_file).get("SEOUL_OPEN_API_KEY")
+            if key:
+                return str(key)
+
+    raise RuntimeError("SEOUL_OPEN_API_KEY not configured")
+
+
+def save_api_key_config(api_key: str, config_file: Path | None = None) -> Path:
+    cleaned_key = api_key.strip()
+    if not cleaned_key:
+        raise RuntimeError("API 키가 비어 있습니다.")
+
+    resolved_config_file = config_file or USER_CONFIG_FILE
+    resolved_config_file.parent.mkdir(parents=True, exist_ok=True)
+    resolved_config_file.write_text(f"SEOUL_OPEN_API_KEY={cleaned_key}\n", encoding="utf-8")
+    resolved_config_file.chmod(0o600)
+    return resolved_config_file
 
 
 def fetch_realtime_arrivals(api_key: str, station_name: str) -> dict[str, object]:
@@ -245,6 +277,9 @@ def _parse_cli_args(argv: list[str]) -> tuple[bool, str] | None:
     if not args:
         return None
 
+    if args[0] == "configure":
+        return False, "configure"
+
     if args[0] == "--json":
         if len(args) < 2:
             return None
@@ -257,12 +292,33 @@ def main() -> int:
     parsed_args = _parse_cli_args(sys.argv)
     if parsed_args is None:
         print('사용법: seoul-metro-realtime [--json] "서울역"')
+        print("설정: seoul-metro-realtime configure")
         return 1
 
     as_json, raw_name = parsed_args
+    if raw_name == "configure":
+        api_key = getpass.getpass("서울시 Open API 키: ")
+        config_file = save_api_key_config(api_key)
+        print(f"API 키를 저장했습니다: {config_file}")
+        return 0
+
     package_root = Path(__file__).resolve().parents[2]
-    env_files = [Path.cwd() / ".env", package_root / ".env", package_root.parent.parent / ".env"]
-    api_key = load_api_key(env_files)
+    env_files = [Path.cwd() / ".env"]
+    fallback_env_files = [package_root / ".env", package_root.parent.parent / ".env"]
+    try:
+        api_key = load_api_key(env_files, fallback_env_files=fallback_env_files)
+    except RuntimeError as exc:
+        print("API 키가 설정되지 않았습니다.")
+        print("")
+        print("한 번만 설정:")
+        print("  seoul-metro-realtime configure")
+        print("")
+        print("또는 현재 셸에서:")
+        print("  export SEOUL_OPEN_API_KEY=your_api_key_here")
+        print("")
+        print(f"상세: {exc}")
+        return 1
+
     now = datetime.now()
     if as_json:
         payload = fetch_realtime_arrivals(api_key, raw_name)
