@@ -14,18 +14,32 @@
 
 ### API 키 설정
 
-현재 작업 디렉터리에 `.env` 파일을 만들고 키를 넣는다.
+처음 한 번만 `configure`로 서울시 Open API 키를 저장한다.
+
+```bash
+uvx seoul-metro-realtime configure
+```
+
+설치해서 쓴다면 아래 명령도 같다.
+
+```bash
+seoul-metro-realtime configure
+```
+
+설정 파일은 `~/.config/seoul-metro-realtime/config.env`에 저장된다.
+
+환경변수로 직접 넣어도 된다.
+
+```bash
+export SEOUL_OPEN_API_KEY=your_api_key_here
+```
+
+프로젝트별 키를 쓰려면 현재 작업 디렉터리에 `.env` 파일을 만든다.
 
 `.env`:
 
 ```bash
 SEOUL_OPEN_API_KEY=your_api_key_here
-```
-
-또는 환경변수로 직접 넣어도 된다.
-
-```bash
-export SEOUL_OPEN_API_KEY=your_api_key_here
 ```
 
 ### `uvx`로 바로 실행
@@ -36,7 +50,7 @@ export SEOUL_OPEN_API_KEY=your_api_key_here
 uvx seoul-metro-realtime 서울역
 ```
 
-`SEOUL_OPEN_API_KEY` 환경변수가 있거나, 현재 작업 디렉터리에 `.env`가 있으면 된다.
+API 키 설정이 없으면 `configure` 실행을 안내한다.
 
 JSON 출력이 필요하면 `--json` 옵션을 붙인다.
 
@@ -62,7 +76,8 @@ seoul-metro-realtime --json 서울역
 
 1. `SEOUL_OPEN_API_KEY` 환경변수
 2. 현재 작업 디렉터리의 `.env`
-3. 패키지 루트의 `.env`
+3. `~/.config/seoul-metro-realtime/config.env`
+4. 패키지 루트의 `.env`
 
 ## 출력 형식
 
