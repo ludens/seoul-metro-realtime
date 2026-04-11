@@ -272,10 +272,26 @@ def get_station_arrivals_summary(
     return build_summary_for_station(station_name, rows, now)
 
 
+def _print_cli_help() -> None:
+    print('사용법: seoul-metro-realtime [--json] "서울역"')
+    print("설정: seoul-metro-realtime configure")
+    print("")
+    print("옵션:")
+    print("  --json    JSON 형식으로 출력")
+    print("  -h, --help    도움말 출력")
+    print("")
+    print("예시:")
+    print("  seoul-metro-realtime 서울역")
+    print("  seoul-metro-realtime --json 서울역")
+
+
 def _parse_cli_args(argv: list[str]) -> tuple[bool, str] | None:
     args = argv[1:]
     if not args:
         return None
+
+    if args[0] in {"-h", "--help"}:
+        return False, "--help"
 
     if args[0] == "configure":
         return False, "configure"
@@ -291,11 +307,14 @@ def _parse_cli_args(argv: list[str]) -> tuple[bool, str] | None:
 def main() -> int:
     parsed_args = _parse_cli_args(sys.argv)
     if parsed_args is None:
-        print('사용법: seoul-metro-realtime [--json] "서울역"')
-        print("설정: seoul-metro-realtime configure")
+        _print_cli_help()
         return 1
 
     as_json, raw_name = parsed_args
+    if raw_name == "--help":
+        _print_cli_help()
+        return 0
+
     if raw_name == "configure":
         api_key = getpass.getpass("서울시 Open API 키: ")
         config_file = save_api_key_config(api_key)

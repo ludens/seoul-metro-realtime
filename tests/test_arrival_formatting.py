@@ -188,6 +188,22 @@ def test_main_guides_user_to_configure_when_api_key_is_missing(tmp_path: Path, m
     assert "export SEOUL_OPEN_API_KEY=" in output
 
 
+def test_main_prints_help_without_api_key(tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SEOUL_OPEN_API_KEY", raising=False)
+    monkeypatch.setattr(get_arrivals_module, "USER_CONFIG_FILE", tmp_path / "missing.env")
+    monkeypatch.setattr(get_arrivals_module.sys, "argv", ["seoul-metro-realtime", "--help"])
+
+    assert get_arrivals_module.main() == 0
+
+    output = capsys.readouterr().out
+    assert "사용법:" in output
+    assert "seoul-metro-realtime [--json] \"서울역\"" in output
+    assert "seoul-metro-realtime configure" in output
+    assert "--json" in output
+    assert "API 키가 설정되지 않았습니다." not in output
+
+
 def test_main_loads_dotenv_from_current_working_directory(tmp_path: Path, monkeypatch, capsys):
     env_file = tmp_path / ".env"
     env_file.write_text("SEOUL_OPEN_API_KEY=cwd-key\n", encoding="utf-8")
